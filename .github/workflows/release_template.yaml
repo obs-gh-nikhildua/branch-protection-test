@@ -1,0 +1,89 @@
+name: Release and push
+on:
+  workflow_call:
+    secrets:
+      TERRAFORM_MODULES_ROLE_ARN:
+        required: true
+      TERRAFORM_MODULES_REGION:
+        required: true
+      TERRAFORM_MODULES_RELEASE_SLACK_URL:
+        required: false
+    inputs:
+      release-count:
+        required: false
+        type: string
+        description: Number of releases to preserve in changelog. Default is 0 (regenerates all).
+        default: '0'
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    # Needed to interact with Github's OIDC token
+    permissions:
+      id-token: write
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check branch
+        if: github.ref_type != 'branch' || github.ref_name != github.event.repository.default_branch
+        run: |
+          echo "::error::release job must be run from the default_branch (${{ github.event.repository.default_branch }}). Found ${{ github.ref_name }}."
+          exit 1
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.TERRAFORM_MODULES_ROLE_ARN }}
+          aws-region: ${{ secrets.TERRAFORM_MODULES_REGION }}
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Get App Token
+        id: get_workflow_token
+        uses: peter-murray/workflow-application-token-action@v2.1.0
+        with:
+          application_id: ${{ secrets.APPLICATION_ID }}
+          application_private_key: ${{ secrets.APPLICATION_PRIVATE_KEY }}
+          #permissions: "actions:write"
+      - name: Conventional Changelog Action
+        id: changelog
+        uses: TriPSs/conventional-changelog-action@v3
+        with:
+          github-token: ${{ steps.get_workflow_token.outputs.token }}
+          skip-version-file: 'true'
+          release-count: ${{ inputs.release-count }}
+          skip-tag: 'true'
+      - name: Mirror in S3
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        run: make s3
+        env:
+          TAG: ${{ steps.changelog.outputs.tag }}
+      - name: Create Release
+        uses: actions/create-release@v1
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        env:
+          GITHUB_TOKEN: ${{ steps.get_workflow_token.outputs.token }}
+        with:
+          tag_name: ${{ steps.changelog.outputs.tag }}
+          release_name: ${{ steps.changelog.outputs.tag }}
+          body: ${{ steps.changelog.outputs.clean_changelog }}
+      - name: Prepare Slack notification
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.TERRAFORM_MODULES_RELEASE_SLACK_URL }}
+        if: ${{ env.SLACK_WEBHOOK_URL != '' && steps.changelog.outputs.skipped == 'false' }}
+        run: |
+          echo version=$(echo "${{ steps.changelog.outputs.tag }}" | sed 's/^v//' ) >> $GITHUB_ENV
+          echo name=$(echo "$GITHUB_REPOSITORY" | sed 's/^.*terraform-observe-//') >> $GITHUB_ENV
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.TERRAFORM_MODULES_RELEASE_SLACK_URL }}
+        if: ${{ env.SLACK_WEBHOOK_URL != '' && steps.changelog.outputs.skipped == 'false' }}
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "namespace": "observeinc",
+              "name": "${{ env.name }}",
+              "system": "observe",
+              "version": "${{ env.version }}",
+              "repo": "${{ github.repository }}",
+              "commit_link": "https://github.com/${{ github.repository }}/tree/${{ steps.changelog.outputs.tag }}"
+            }
