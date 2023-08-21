@@ -4,5 +4,5 @@ on:
 
 jobs:
   bump:
-    uses: ./.github/workflows/release_template.yaml@main
+    uses: ./.github/workflows/release_template.yaml
     secrets: inherit
