@@ -1,13 +1,13 @@
 name: Release and push
 on:
   workflow_call:
-    secrets:
-      TERRAFORM_MODULES_ROLE_ARN:
-        required: true
-      TERRAFORM_MODULES_REGION:
-        required: true
-      TERRAFORM_MODULES_RELEASE_SLACK_URL:
-        required: false
+    # secrets:
+    #   TERRAFORM_MODULES_ROLE_ARN:
+    #     required: true
+    #   TERRAFORM_MODULES_REGION:
+    #     required: true
+    #   TERRAFORM_MODULES_RELEASE_SLACK_URL:
+    #     required: false
     inputs:
       release-count:
         required: false
@@ -19,21 +19,21 @@ jobs:
   bump:
     runs-on: ubuntu-latest
     # Needed to interact with Github's OIDC token
-    permissions:
-      id-token: write
-      contents: write
-      pull-requests: write
+    # permissions:
+    #   id-token: write
+    #   contents: write
+    #   pull-requests: write
     steps:
       - name: Check branch
         if: github.ref_type != 'branch' || github.ref_name != github.event.repository.default_branch
         run: |
           echo "::error::release job must be run from the default_branch (${{ github.event.repository.default_branch }}). Found ${{ github.ref_name }}."
           exit 1
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: ${{ secrets.TERRAFORM_MODULES_ROLE_ARN }}
-          aws-region: ${{ secrets.TERRAFORM_MODULES_REGION }}
+      # - name: Configure AWS Credentials
+      #   uses: aws-actions/configure-aws-credentials@v2
+      #   with:
+      #     role-to-assume: ${{ secrets.TERRAFORM_MODULES_ROLE_ARN }}
+      #     aws-region: ${{ secrets.TERRAFORM_MODULES_REGION }}
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Get App Token
@@ -65,25 +65,4 @@ jobs:
           tag_name: ${{ steps.changelog.outputs.tag }}
           release_name: ${{ steps.changelog.outputs.tag }}
           body: ${{ steps.changelog.outputs.clean_changelog }}
-      - name: Prepare Slack notification
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.TERRAFORM_MODULES_RELEASE_SLACK_URL }}
-        if: ${{ env.SLACK_WEBHOOK_URL != '' && steps.changelog.outputs.skipped == 'false' }}
-        run: |
-          echo version=$(echo "${{ steps.changelog.outputs.tag }}" | sed 's/^v//' ) >> $GITHUB_ENV
-          echo name=$(echo "$GITHUB_REPOSITORY" | sed 's/^.*terraform-observe-//') >> $GITHUB_ENV
-      - name: Notify Slack
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.TERRAFORM_MODULES_RELEASE_SLACK_URL }}
-        if: ${{ env.SLACK_WEBHOOK_URL != '' && steps.changelog.outputs.skipped == 'false' }}
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          payload: |
-            {
-              "namespace": "observeinc",
-              "name": "${{ env.name }}",
-              "system": "observe",
-              "version": "${{ env.version }}",
-              "repo": "${{ github.repository }}",
-              "commit_link": "https://github.com/${{ github.repository }}/tree/${{ steps.changelog.outputs.tag }}"
-            }
+    
