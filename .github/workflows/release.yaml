@@ -4,5 +4,5 @@ on:
 
 jobs:
   bump:
-    uses: release.yaml@main
+    uses: release_template.yaml@main
     secrets: inherit
