@@ -50,7 +50,7 @@ jobs:
           github-token: ${{ steps.get_workflow_token.outputs.token }}
           skip-version-file: 'true'
           release-count: ${{ inputs.release-count }}
-          #skip-tag: 'true'
+          skip-tag: 'true'
       - name: Mirror in S3
         if: ${{ steps.changelog.outputs.skipped == 'false' }}
         run: make s3
