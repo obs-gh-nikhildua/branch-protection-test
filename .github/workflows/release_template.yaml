@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     # Needed to interact with Github's OIDC token
     permissions:
+      id-token: write
       contents: write
       pull-requests: write
     steps:
